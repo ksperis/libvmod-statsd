@@ -1,8 +1,8 @@
 AC_PREREQ(2.59)
-AC_COPYRIGHT([Copyright (c) 2011 Varnish Software AS])
+AC_COPYRIGHT([Copyright (c) 2011-2015 Varnish Software AS])
 AC_INIT([libvmod-statsd], [trunk])
 AC_CONFIG_MACRO_DIR([m4])
-m4_ifndef([VARNISH_VMOD_INCLUDES], AC_MSG_ERROR([Need varnish.m4]))
+m4_ifndef([VARNISH_VMOD_INCLUDES], AC_MSG_ERROR([Need varnish.m4 -- see README.rst]))
 AC_CONFIG_SRCDIR(src/vmod_statsd.vcc)
 AM_CONFIG_HEADER(config.h)
 
@@ -67,7 +67,6 @@ AC_PATH_PROG([VARNISHTEST], [varnishtest], [],
     [$LIBVARNISHAPI_BINDIR:$LIBVARNISHAPI_SBINDIR:$PATH])
 AC_PATH_PROG([VARNISHD], [varnishd], [],
     [$LIBVARNISHAPI_SBINDIR:$LIBVARNISHAPI_BINDIR:$PATH])
-
 
 AC_CONFIG_FILES([
 	Makefile
