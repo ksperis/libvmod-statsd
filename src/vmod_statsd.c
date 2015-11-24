@@ -83,6 +83,9 @@ free_function(void *priv) {
 int
 init_function(const struct vrt_ctx *ctx, struct vmod_priv *priv, enum vcl_event_e e) {
 
+    if (e != VCL_EVENT_LOAD)
+        return (0);
+
     // ******************************
     // Configuration defaults
     // ******************************
