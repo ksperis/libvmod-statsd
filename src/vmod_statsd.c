@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "vcl.h"
 #include "vrt.h"
 #include "cache/cache.h"
 
@@ -80,7 +81,7 @@ free_function(void *priv) {
 }
 
 int
-init_function(struct vmod_priv *priv, const struct VCL_conf *conf) {
+init_function(const struct vrt_ctx *ctx, struct vmod_priv *priv, enum vcl_event_e e) {
 
     // ******************************
     // Configuration defaults
