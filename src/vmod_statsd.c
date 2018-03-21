@@ -2,9 +2,18 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "vcl.h"
-#include "vrt.h"
-#include "cache/cache.h"
+#include <cache/cache.h>
+#include <vcl.h>
+
+#ifndef VRT_H_INCLUDED
+#include <vrt.h>
+#endif
+
+#ifndef VDEF_H_INCLUDED
+#include <vdef.h>
+#endif
+
+
 
 #include "vcc_if.h"
 
