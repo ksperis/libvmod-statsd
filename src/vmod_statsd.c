@@ -27,13 +27,6 @@
 
 #define BUF_SIZE 500
 
-//#define DEBUG 1
-
-#ifdef DEBUG                    // To print diagnostics to the error log
-#define _DEBUG 1                // enable through gcc -DDEBUG
-#else
-#define _DEBUG 0
-#endif
 
 typedef struct statsdConfig {
 	char *host;     // statsd host
@@ -63,7 +56,6 @@ _strip_newline( char *line ) {
         *pos = '\0';
     }
 
-    //_DEBUG && fprintf( stderr, "vmod-statsd: stripping new lines. New string: %s\n", line );
 
 
     return line;
@@ -77,15 +69,13 @@ static void
 free_function(void *priv) {
     config_t *cfg = priv;
     if( cfg->socket > 0 ) {
-        _DEBUG && fprintf( stderr, "vmod-statsd: free: Closing socket with FD %d\n", cfg->socket );
         int close_ret = close( cfg->socket );
         if( close_ret != 0 ) {
             int close_error = errno;
-            _DEBUG && fprintf( stderr, "vmod-statsd: free: Error closing socket: %s (errno %d)\n",
-                             strerror(close_error), close_error );
+            //VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: free: Error closing socket: %s (errno %d)\n",
+            //                 strerror(close_error), close_error );
         }
         cfg->socket = 0;
-        _DEBUG && fprintf( stderr, "vmod-statsd: free: Socket closed/reset\n" );
     }
 }
 
@@ -107,7 +97,7 @@ init_function(const struct vrt_ctx *ctx, struct vmod_priv *priv, enum vcl_event_
     cfg->suffix = "";
     cfg->socket = 0;
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: init: configuration initialized\n" );
+    //VSLb(ctx->vsl, SLT_VCL_Log,"vmod-statsd: init: configuration intitialized");
 
     // ******************************
     // Store the config
@@ -153,7 +143,7 @@ vmod_server( const struct vrt_ctx *ctx, struct vmod_priv *priv, VCL_STRING host,
 // ******************************
 
 int
-_connect_to_statsd( struct vmod_priv *priv ) {
+_connect_to_statsd( struct vmod_priv *priv , const struct vrt_ctx * ctx) {
     config_t *cfg = priv->priv;
 
     // Grab 2 structs for the connection
@@ -162,7 +152,8 @@ _connect_to_statsd( struct vmod_priv *priv ) {
     hints = malloc(sizeof(struct addrinfo));
 
     if (hints == NULL) {
-        fprintf( stderr, "vmod-statsd: malloc failed for hints addrinfo struct\n"  );
+        fprintf( stderr, ""  );
+        VSLb(ctx->vsl, SLT_VCL_Log,"vmod-statsd: malloc failed for hints addrinfo struct");
         return -1;
     }
 
@@ -178,20 +169,17 @@ _connect_to_statsd( struct vmod_priv *priv ) {
     hints->ai_protocol = IPPROTO_UDP;
     hints->ai_flags    = 0;
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: socket hints compiled\n" );
 
     // using getaddrinfo lets us use a hostname, rather than an
     // ip address.
     int err;
     if( (err = getaddrinfo( cfg->host, cfg->port, hints, &statsd )) != 0 ) {
-        fprintf( stderr, "vmod-statsd: getaddrinfo on %s:%s failed: %s\n",
-            cfg->host, cfg->port, gai_strerror(err) );
 
+        VSLb(ctx->vsl, SLT_VCL_Log,"vmod-statsd: getaddrinfo on %s:%s failed: %s", cfg->host, cfg->port, gai_strerror(err));
         freeaddrinfo( hints );
         return -1;
     }
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: getaddrinfo completed\n" );
 
     // ******************************
     // Store the open connection
@@ -204,18 +192,17 @@ _connect_to_statsd( struct vmod_priv *priv ) {
                        statsd->ai_protocol );
 
     if( cfg->socket == -1 ) {
-        _DEBUG && fprintf( stderr, "vmod-statsd: socket creation failed\n" );
+        VSLb(ctx->vsl, SLT_VCL_Log,"vmod-statsd: socket creation failed");
         close( cfg->socket );
         freeaddrinfo( statsd );
         freeaddrinfo( hints );
         return -1;
     }
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: socket opened: %d\n", cfg->socket );
 
     // connection failed.. for some reason...
     if( connect( cfg->socket, statsd->ai_addr, statsd->ai_addrlen ) == -1 ) {
-        _DEBUG && fprintf( stderr, "vmod-statsd: socket connection failed\n" );
+        VSLb(ctx->vsl, SLT_VCL_Log,"vmod-statsd: socket conection failed");
         close( cfg->socket );
 
         freeaddrinfo( statsd );
@@ -223,36 +210,30 @@ _connect_to_statsd( struct vmod_priv *priv ) {
         return -1;
     }
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: socket connected\n" );
 
     // now that we have an outgoing socket, we don't need this
     // anymore.
     freeaddrinfo( statsd );
     freeaddrinfo( hints );
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: statsd server: %s:%s (fd: %d)\n",
-                cfg->host, cfg->port, cfg->socket );
 
+    VSLb(ctx->vsl, SLT_VCL_Log,"vmod-statsd: statsd server: %s:%s (fd: %d)", cfg->host, cfg->port, cfg->socket );
     return cfg->socket;
 }
 
 int
-_send_to_statsd( struct vmod_priv *priv, const char *key, const char *val ) {
-    _DEBUG && fprintf( stderr, "vmod-statsd: pre config\n" );
-
+_send_to_statsd( struct vmod_priv *priv, const char *key, const char *val, const struct vrt_ctx *ctx) {
     config_t *cfg = priv->priv;
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: post config\n" );
 
     // If you are using some empty key, bail - this can happen if you use
     // say: statsd.incr( req.http.x-does-not-exist ). Rather than getting
     // and empty string, we get a null pointer.
     if( key == NULL || val == NULL ) {
-        _DEBUG && fprintf( stderr, "vmod-statsd: Key or value is NULL pointer - ignoring\n" );
+        VSLb( ctx->vsl, SLT_VCL_Log,  "vmod-statsd: Key or value is NULL pointer - ignoring" );
         return -1;
     }
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: pre stat composition\n" );
 
     // Enough room for the key/val plus prefix/suffix plus newline plus a null byte.
     char stat[ strlen(key) + strlen(val) +
@@ -263,7 +244,6 @@ _send_to_statsd( struct vmod_priv *priv, const char *key, const char *val ) {
     strncat( stat, cfg->suffix, strlen(cfg->suffix) + 1 );
     strncat( stat, val,         strlen(val)         + 1 );
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: post stat composition: %s\n", stat );
 
     // Newer versions of statsd allow multiple metrics in a single packet, delimited
     // by newlines. That unfortunately means that if we end our message with a new
@@ -273,21 +253,19 @@ _send_to_statsd( struct vmod_priv *priv, const char *key, const char *val ) {
     // modern statsds.
     //strncat( stat, "\n",        1                       );
 
-    //_DEBUG && fprintf( stderr, "vmod-statsd: send: %s:%s %s\n", cfg->host, cfg->port, stat );
+    //VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: send: %s:%s %s\n", cfg->host, cfg->port, stat );
 
     // ******************************
     // Sanity checks
     // ******************************
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: pre stat length\n" );
 
     int len = strlen( stat );
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: stat length: %d\n", len );
 
     // +1 for the null byte
     if( len + 1 >= BUF_SIZE ) {
-        _DEBUG && fprintf( stderr, "vmod-statsd: Message length %d > max length %d - ignoring\n",
+        VSLb( ctx->vsl, SLT_VCL_Log, "vmod-statsd: Message length %d > max length %d - ignoring",
             len, BUF_SIZE );
         return -1;
     }
@@ -296,41 +274,39 @@ _send_to_statsd( struct vmod_priv *priv, const char *key, const char *val ) {
     // Send the packet
     // ******************************
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: Checking for existing socket (%d)\n", cfg->socket );
 
     // we may not have connected yet - in that case, do it now
-    int sock = cfg->socket > 0 ? cfg->socket : _connect_to_statsd( priv );
+    int sock = cfg->socket > 0 ? cfg->socket : _connect_to_statsd( priv, ctx );
 
     // If we didn't get a socket, don't bother trying to send
     if( sock == -1 ) {
-        _DEBUG && fprintf( stderr, "vmod-statsd: Could not get socket for %s\n", stat );
+        VSLb( ctx->vsl, SLT_VCL_Log, "vmod-statsd: Could not get socket for %s", stat );
         return -1;
     }
 
     // Send the stat
     int sent = write( sock, stat, len );
 
-    _DEBUG && fprintf( stderr, "vmod-statsd: Sent %d of %d bytes to FD %d\n", sent, len, sock );
+    VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: Sent %d of %d bytes to FD %d", sent, len, sock );
 
     // An error occurred - unset the socket so that the next write may try again
     if( sent != len ) {
         int write_error = errno;
-        _DEBUG && fprintf( stderr, "vmod-statsd: Could not write stat '%s': %s (errno %d)\n",
+        VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: Could not write stat '%s': %s (errno %d)",
                          stat, strerror(write_error), write_error );
 
         // if the write_error is not due to a bad file descriptor, try to close the socket first
         if( write_error != 9 ) {
-            _DEBUG && fprintf( stderr, "vmod-statsd: Closing socket with FD: %d\n", sock );
             int close_ret_val = close( sock );
             if( close_ret_val != 0 ) {
                 int close_error = errno;
-                _DEBUG && fprintf( stderr, "vmod-statsd: Error closing socket: %s (errno %d)\n",
+                VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: Error closing socket: %s (errno %d)",
                                  strerror(close_error), close_error );
             }
         }
         // reset the socket
         cfg->socket = 0;
-        _DEBUG && fprintf( stderr, "vmod-statsd: Socket closed/reset\n" );
+        VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: Socket closed/reset" );
 
         return -1;
     }
@@ -341,15 +317,15 @@ _send_to_statsd( struct vmod_priv *priv, const char *key, const char *val ) {
 
 VCL_VOID
 vmod_incr( const struct vrt_ctx *ctx, struct vmod_priv *priv, VCL_STRING key ) {
-    _DEBUG && fprintf( stderr, "vmod-statsd: incr: %s\n", key );
+    VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: incr: %s", key );
 
     // Incremenet is straight forward - just add the count + type
-    _send_to_statsd( priv, key, ":1|c" );
+    _send_to_statsd( priv, key, ":1|c" , ctx);
 }
 
 VCL_VOID
 vmod_timing( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key, VCL_INT num ) {
-    _DEBUG && fprintf( stderr, "vmod-statsd: timing: %s = %d\n", key, num );
+    VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: timing: %s = %d", key, num );
 
     // Get the buffer ready. 10 for the maximum lenghth of an int and +5 for metadata
     char val[ 15 ];
@@ -357,12 +333,12 @@ vmod_timing( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key,
     // looks like glork:320|ms
     snprintf( val, sizeof(val), ":%d|ms", num );
 
-    _send_to_statsd( priv, key, val );
+    _send_to_statsd( priv, key, val , ctx);
 }
 
 VCL_VOID
 vmod_counter( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key, VCL_INT num ) {
-    _DEBUG && fprintf( stderr, "vmod-statsd: counter: %s = %d\n", key, num );
+    VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: counter: %s = %d", key, num );
 
     // Get the buffer ready. 10 for the maximum lenghth of an int and +5 for metadata
     char val[ 15 ];
@@ -370,12 +346,12 @@ vmod_counter( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key
     // looks like: gorets:42|c
     snprintf( val, sizeof(val), ":%d|c", num );
 
-    _send_to_statsd( priv, key, val );
+    _send_to_statsd( priv, key, val , ctx);
 }
 
 VCL_VOID
 vmod_gauge( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key, VCL_INT num ) {
-    _DEBUG && fprintf( stderr, "vmod-statsd: gauge: %s = %d\n", key, num );
+    VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: gauge: %s = %d", key, num );
 
     // Get the buffer ready. 10 for the maximum lenghth of an int and +5 for metadata
     char val[ 15 ];
@@ -383,6 +359,6 @@ vmod_gauge( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key, 
     // looks like: gaugor:333|g
     snprintf( val, sizeof(val), ":%d|g", num );
 
-    _send_to_statsd( priv, key, val );
+    _send_to_statsd( priv, key, val, ctx );
 }
 
