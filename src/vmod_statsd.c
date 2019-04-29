@@ -17,6 +17,17 @@
 
 #include "vcc_if.h"
 
+/* Varnish < 6.2 compat */
+#ifndef VPFX
+  #define VPFX(a) vmod_ ## a
+  #define VARGS(a) vmod_ ## a ## _arg
+  #define VENUM(a) vmod_enum_ ## a
+  #define VEVENT(a) a
+#else
+  #define VEVENT(a) VPFX(a)
+#endif
+
+
 // Socket related libraries
 #include <errno.h>
 #include <sys/types.h>
@@ -80,7 +91,7 @@ free_function(void *priv) {
 }
 
 int
-init_function(const struct vrt_ctx *ctx, struct vmod_priv *priv, enum vcl_event_e e) {
+VEVENT(event_function)(VRT_CTX, struct VPFX(priv) *priv, enum vcl_event_e e) {
 
     if (e != VCL_EVENT_LOAD)
         return (0);
@@ -111,14 +122,14 @@ init_function(const struct vrt_ctx *ctx, struct vmod_priv *priv, enum vcl_event_
 
 /** The following may ONLY be called from VCL_init **/
 VCL_VOID
-vmod_prefix( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *prefix ) {
+VPFX(prefix)( VRT_CTX, struct VPFX(priv) *priv, const char *prefix ) {
     config_t *cfg = priv->priv;
     cfg->prefix = _strip_newline( strdup( prefix ) );
 }
 
 /** The following may ONLY be called from VCL_init **/
 VCL_VOID
-vmod_suffix( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *suffix ) {
+VPFX(suffix)( VRT_CTX, struct VPFX(priv) *priv, const char *suffix ) {
 
     config_t *cfg = priv->priv;
     cfg->suffix = _strip_newline( strdup( suffix ) );
@@ -126,7 +137,7 @@ vmod_suffix( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *suff
 
 /** The following may ONLY be called from VCL_init **/
 VCL_VOID
-vmod_server( const struct vrt_ctx *ctx, struct vmod_priv *priv, VCL_STRING host, VCL_STRING port ) {
+VPFX(server)( VRT_CTX, struct VPFX(priv) *priv, VCL_STRING host, VCL_STRING port ) {
 
     // ******************************
     // Configuration
@@ -143,7 +154,7 @@ vmod_server( const struct vrt_ctx *ctx, struct vmod_priv *priv, VCL_STRING host,
 // ******************************
 
 int
-_connect_to_statsd( struct vmod_priv *priv , const struct vrt_ctx * ctx) {
+_connect_to_statsd( struct VPFX(priv) *priv , const struct vrt_ctx * ctx) {
     config_t *cfg = priv->priv;
 
     // Grab 2 structs for the connection
@@ -222,7 +233,7 @@ _connect_to_statsd( struct vmod_priv *priv , const struct vrt_ctx * ctx) {
 }
 
 int
-_send_to_statsd( struct vmod_priv *priv, const char *key, const char *val, const struct vrt_ctx *ctx) {
+_send_to_statsd( struct VPFX(priv) *priv, const char *key, const char *val, VRT_CTX) {
     config_t *cfg = priv->priv;
 
 
@@ -316,7 +327,7 @@ _send_to_statsd( struct vmod_priv *priv, const char *key, const char *val, const
 
 
 VCL_VOID
-vmod_incr( const struct vrt_ctx *ctx, struct vmod_priv *priv, VCL_STRING key ) {
+VPFX(incr)( VRT_CTX, struct VPFX(priv) *priv, VCL_STRING key ) {
     VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: incr: %s", key );
 
     // Incremenet is straight forward - just add the count + type
@@ -324,7 +335,7 @@ vmod_incr( const struct vrt_ctx *ctx, struct vmod_priv *priv, VCL_STRING key ) {
 }
 
 VCL_VOID
-vmod_timing( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key, VCL_INT num ) {
+VPFX(timing)( VRT_CTX, struct VPFX(priv) *priv, const char *key, VCL_INT num ) {
     VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: timing: %s = %d", key, num );
 
     // Get the buffer ready. 10 for the maximum lenghth of an int and +5 for metadata
@@ -337,7 +348,7 @@ vmod_timing( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key,
 }
 
 VCL_VOID
-vmod_counter( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key, VCL_INT num ) {
+VPFX(counter)( VRT_CTX, struct VPFX(priv) *priv, const char *key, VCL_INT num ) {
     VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: counter: %s = %d", key, num );
 
     // Get the buffer ready. 10 for the maximum lenghth of an int and +5 for metadata
@@ -350,7 +361,7 @@ vmod_counter( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key
 }
 
 VCL_VOID
-vmod_gauge( const struct vrt_ctx *ctx, struct vmod_priv *priv, const char *key, VCL_INT num ) {
+VPFX(gauge)( VRT_CTX, struct VPFX(priv) *priv, const char *key, VCL_INT num ) {
     VSLb(ctx->vsl, SLT_VCL_Log, "vmod-statsd: gauge: %s = %d", key, num );
 
     // Get the buffer ready. 10 for the maximum lenghth of an int and +5 for metadata
